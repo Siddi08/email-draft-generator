@@ -3,13 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Generate professional email drafts instantly with AI. Get 3 tone variations for any email type.">
+    <meta name="theme-color" content="#2563eb">
     <title>Email Draft Generator</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: #f9fafb;
-            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #f9fafb;
+            min-height: 100vh;
+        }
+        
+        #root {
+            min-height: 100vh;
         }
     </style>
 </head>
@@ -23,8 +38,8 @@
     <script type="text/babel">
         const { useState } = React;
 
-        function App() {
-          const [brainDump, setBrainDump] = useState('');
+        function EmailDraftGenerator() {
+          const [emailType, setEmailType] = useState('follow-up');
           const [formData, setFormData] = useState({
             recipient: '',
             context: '',
@@ -35,156 +50,361 @@
           const [drafts, setDrafts] = useState(null);
           const [loading, setLoading] = useState(false);
           const [error, setError] = useState('');
+          const [copiedIndex, setCopiedIndex] = useState(null);
+          const [brainDump, setBrainDump] = useState('');
+          const [processingDump, setProcessingDump] = useState(false);
+          const [showBrainDump, setShowBrainDump] = useState(true);
 
-          const handleBrainDump = async () => {
-            if (!brainDump.trim()) return;
-            
-            setLoading(true);
+          const emailTypes = [
+            { value: 'professional-reply', label: 'Professional Reply' },
+            { value: 'cold-outreach', label: 'Cold Outreach' },
+            { value: 'follow-up', label: 'Follow-up / Reminder' },
+            { value: 'complaint', label: 'Complaint / Escalation' },
+            { value: 'thank-you', label: 'Thank You' },
+            { value: 'networking', label: 'Networking' }
+          ];
+
+          const toneOptions = [
+            { value: 'friendly', label: 'Friendly', desc: 'Warm and approachable' },
+            { value: 'formal', label: 'Formal', desc: 'Professional and structured' },
+            { value: 'direct', label: 'Direct', desc: 'Clear and to the point' }
+          ];
+
+          const processBrainDump = async () => {
+            if (!brainDump.trim()) {
+              setError('Please enter some information to process');
+              return;
+            }
+
+            setProcessingDump(true);
             setError('');
-          const { useState } = React;   
+
             try {
-              const res = await fetch('/.netlify/functions/process-brain-dump', {
+              const response = await fetch('/.netlify/functions/process-brain-dump', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ brainDump })
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  brainDump: brainDump
+                })
               });
+
+              if (!response.ok) {
+                throw new Error('Failed to process brain dump');
+              }
+
+              const extracted = await response.json();
               
-              if (!res.ok) throw new Error('Failed');
-              
-              const data = await res.json();
+              setEmailType(extracted.emailType || 'follow-up');
               setFormData({
-                recipient: data.recipient || '',
-                context: data.context || '',
-                specificRequest: data.specificRequest || '',
-                deadline: data.deadline || '',
-                tone: data.suggestedTone || 'formal'
+                recipient: extracted.recipient || '',
+                context: extracted.context || '',
+                specificRequest: extracted.specificRequest || '',
+                deadline: extracted.deadline || '',
+                tone: extracted.suggestedTone || 'formal'
               });
+              
+              setShowBrainDump(false);
               setBrainDump('');
             } catch (err) {
-              setError('Brain dump failed: ' + err.message);
+              console.error('Processing error:', err);
+              setError('Failed to process your information. Please try again.');
             } finally {
-              setLoading(false);
+              setProcessingDump(false);
             }
           };
 
           const handleGenerate = async () => {
             if (!formData.recipient || !formData.context) {
-              setError('Need recipient and context');
+              setError('Please fill in at least recipient and context');
               return;
             }
-            
+
             setLoading(true);
             setError('');
             setDrafts(null);
-            
+
             try {
-              const res = await fetch('/.netlify/functions/generate-emails', {
+              const response = await fetch('/.netlify/functions/generate-emails', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                  'Content-Type': 'application/json',
+                },
                 body: JSON.stringify({
-                  emailType: 'follow-up',
-                  ...formData
+                  emailType: emailType,
+                  recipient: formData.recipient,
+                  context: formData.context,
+                  specificRequest: formData.specificRequest,
+                  deadline: formData.deadline,
+                  tone: formData.tone
                 })
               });
-              
-              if (!res.ok) throw new Error('Failed');
-              
-              const data = await res.json();
-              console.log('Got drafts:', data);
-              setDrafts(data);
+
+              if (!response.ok) {
+                throw new Error('Failed to generate emails');
+              }
+
+              const parsedDrafts = await response.json();
+              setDrafts(parsedDrafts);
             } catch (err) {
-              setError('Generation failed: ' + err.message);
+              console.error('Generation error:', err);
+              setError('Failed to generate emails. Please try again.');
             } finally {
               setLoading(false);
             }
           };
 
-          const copyText = async (text) => {
+          const copyToClipboard = async (text, index) => {
             try {
               await navigator.clipboard.writeText(text);
-              alert('Copied!');
+              setCopiedIndex(index);
+              setTimeout(() => setCopiedIndex(null), 2000);
             } catch (err) {
-              console.error('Copy failed:', err);
+              console.error('Failed to copy:', err);
             }
           };
 
           return (
-            <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
-              <h1 style={{ marginBottom: '30px' }}>Email Draft Generator</h1>
-
-              {/* Brain Dump */}
-              <div style={{ marginBottom: '30px', padding: '20px', background: '#e0f2fe', borderRadius: '8px' }}>
-                <h2 style={{ fontSize: '18px', marginBottom: '10px' }}>💭 Brain Dump (Optional)</h2>
-                <textarea
-                  value={brainDump}
-                  onChange={(e) => setBrainDump(e.target.value)}
-                  placeholder="Dump all your thoughts here..."
-                  rows={5}
-                  style={{ width: '100%', padding: '10px', fontSize: '15px', borderRadius: '6px', border: '1px solid #0ea5e9' }}
-                />
-                <button
-                  onClick={handleBrainDump}
-                  disabled={loading || !brainDump.trim()}
-                  style={{
-                    marginTop: '10px',
-                    padding: '10px 20px',
-                    background: loading ? '#93c5fd' : '#0ea5e9',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: loading ? 'not-allowed' : 'pointer'
-                  }}
-                >
-                  {loading ? 'Processing...' : 'Extract & Fill Form'}
-                </button>
+            <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+              <div style={{ marginBottom: '32px' }}>
+                <h1 style={{ fontSize: '28px', fontWeight: '600', marginBottom: '8px', color: '#1a1a1a' }}>
+                  Email Draft Generator
+                </h1>
+                <p style={{ color: '#666', fontSize: '15px' }}>
+                  Fill in the details below and get 3 ready-to-send email variations
+                </p>
               </div>
 
-              {/* Form */}
-              <div style={{ marginBottom: '30px' }}>
-                <div style={{ marginBottom: '15px' }}>
-                  <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Recipient *</label>
+              {showBrainDump && (
+                <div style={{
+                  marginBottom: '32px',
+                  padding: '24px',
+                  backgroundColor: '#f0f9ff',
+                  border: '2px dashed #3b82f6',
+                  borderRadius: '8px'
+                }}>
+                  <div style={{ marginBottom: '16px' }}>
+                    <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '6px', color: '#1e40af' }}>
+                      💭 Brain Dump Mode (Optional)
+                    </h2>
+                    <p style={{ fontSize: '14px', color: '#1e40af', margin: 0 }}>
+                      Not sure how to organize your thoughts? Paste everything here messily and I'll structure it for you.
+                    </p>
+                  </div>
+                  
+                  <textarea
+                    value={brainDump}
+                    onChange={(e) => setBrainDump(e.target.value)}
+                    placeholder="Example: 'So I submitted this academic case 3 weeks ago and they said 10 business days but nothing yet and I need to know ASAP because I have to make enrollment decisions and they're not responding...'"
+                    rows={6}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      fontSize: '15px',
+                      border: '1px solid #93c5fd',
+                      borderRadius: '6px',
+                      resize: 'vertical',
+                      fontFamily: 'inherit',
+                      marginBottom: '12px'
+                    }}
+                  />
+                  
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <button
+                      onClick={processBrainDump}
+                      disabled={processingDump || !brainDump.trim()}
+                      style={{
+                        padding: '10px 20px',
+                        fontSize: '15px',
+                        fontWeight: '500',
+                        backgroundColor: processingDump ? '#93c5fd' : '#3b82f6',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: processingDump || !brainDump.trim() ? 'not-allowed' : 'pointer',
+                        opacity: !brainDump.trim() ? 0.5 : 1
+                      }}
+                    >
+                      {processingDump ? 'Processing...' : 'Extract & Fill Form'}
+                    </button>
+                    
+                    <button
+                      onClick={() => setShowBrainDump(false)}
+                      style={{
+                        padding: '10px 20px',
+                        fontSize: '14px',
+                        color: '#1e40af',
+                        backgroundColor: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        textDecoration: 'underline'
+                      }}
+                    >
+                      Skip - Fill manually
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {!showBrainDump && (
+                <button
+                  onClick={() => setShowBrainDump(true)}
+                  style={{
+                    marginBottom: '24px',
+                    padding: '8px 16px',
+                    fontSize: '14px',
+                    color: '#3b82f6',
+                    backgroundColor: '#eff6ff',
+                    border: '1px solid #3b82f6',
+                    borderRadius: '6px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ← Back to Brain Dump Mode
+                </button>
+              )}
+
+              <div style={{ display: 'grid', gap: '24px', marginBottom: '24px' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px', color: '#333' }}>
+                    Email Type
+                  </label>
+                  <select
+                    value={emailType}
+                    onChange={(e) => setEmailType(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      fontSize: '15px',
+                      border: '1px solid #ddd',
+                      borderRadius: '6px',
+                      backgroundColor: 'white'
+                    }}
+                  >
+                    {emailTypes.map(type => (
+                      <option key={type.value} value={type.value}>{type.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px', color: '#333' }}>
+                    Who are you emailing? *
+                  </label>
                   <input
+                    type="text"
                     value={formData.recipient}
                     onChange={(e) => setFormData({...formData, recipient: e.target.value})}
-                    placeholder="Who are you emailing?"
-                    style={{ width: '100%', padding: '10px', fontSize: '15px', borderRadius: '6px', border: '1px solid #ddd' }}
+                    placeholder="e.g., University Administration Office, Dr. Smith, Admissions Team"
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      fontSize: '15px',
+                      border: '1px solid #ddd',
+                      borderRadius: '6px'
+                    }}
                   />
                 </div>
 
-                <div style={{ marginBottom: '15px' }}>
-                  <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Context *</label>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px', color: '#333' }}>
+                    What's the situation? *
+                  </label>
                   <textarea
                     value={formData.context}
                     onChange={(e) => setFormData({...formData, context: e.target.value})}
-                    placeholder="What's the situation?"
+                    placeholder="e.g., I submitted a case about academic misconduct 3 weeks ago and haven't received any update on the outcome"
                     rows={3}
-                    style={{ width: '100%', padding: '10px', fontSize: '15px', borderRadius: '6px', border: '1px solid #ddd' }}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      fontSize: '15px',
+                      border: '1px solid #ddd',
+                      borderRadius: '6px',
+                      resize: 'vertical',
+                      fontFamily: 'inherit'
+                    }}
                   />
                 </div>
 
-                <div style={{ marginBottom: '15px' }}>
-                  <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>What do you need?</label>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px', color: '#333' }}>
+                    What do you need from them?
+                  </label>
                   <input
+                    type="text"
                     value={formData.specificRequest}
                     onChange={(e) => setFormData({...formData, specificRequest: e.target.value})}
-                    placeholder="Your request..."
-                    style={{ width: '100%', padding: '10px', fontSize: '15px', borderRadius: '6px', border: '1px solid #ddd' }}
+                    placeholder="e.g., I need a decision by the end of this week, Please provide an update on the timeline"
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      fontSize: '15px',
+                      border: '1px solid #ddd',
+                      borderRadius: '6px'
+                    }}
                   />
                 </div>
 
-                <div style={{ marginBottom: '20px' }}>
-                  <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Deadline</label>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', fontSize: '14px', color: '#333' }}>
+                    Any deadline or urgency?
+                  </label>
                   <input
+                    type="text"
                     value={formData.deadline}
                     onChange={(e) => setFormData({...formData, deadline: e.target.value})}
-                    placeholder="ASAP, by Friday, etc."
-                    style={{ width: '100%', padding: '10px', fontSize: '15px', borderRadius: '6px', border: '1px solid #ddd' }}
+                    placeholder="e.g., by Friday, ASAP, within 2 business days"
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      fontSize: '15px',
+                      border: '1px solid #ddd',
+                      borderRadius: '6px'
+                    }}
                   />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', marginBottom: '12px', fontWeight: '500', fontSize: '14px', color: '#333' }}>
+                    Primary Tone Preference
+                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+                    {toneOptions.map(tone => (
+                      <label
+                        key={tone.value}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '12px',
+                          border: formData.tone === tone.value ? '2px solid #2563eb' : '1px solid #ddd',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          backgroundColor: formData.tone === tone.value ? '#eff6ff' : 'white'
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name="tone"
+                          value={tone.value}
+                          checked={formData.tone === tone.value}
+                          onChange={(e) => setFormData({...formData, tone: e.target.value})}
+                          style={{ marginRight: '8px' }}
+                        />
+                        <div>
+                          <div style={{ fontWeight: '500', fontSize: '14px' }}>{tone.label}</div>
+                          <div style={{ fontSize: '12px', color: '#666' }}>{tone.desc}</div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
                 </div>
 
                 {error && (
-                  <div style={{ padding: '10px', background: '#fee2e2', color: '#991b1b', borderRadius: '6px', marginBottom: '15px' }}>
-                    ⚠️ {error}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px', color: '#991b1b' }}>
+                    <span style={{ fontSize: '20px' }}>⚠️</span>
+                    <span>{error}</span>
                   </div>
                 )}
 
@@ -192,81 +412,113 @@
                   onClick={handleGenerate}
                   disabled={loading}
                   style={{
-                    width: '100%',
-                    padding: '12px',
-                    background: loading ? '#93c5fd' : '#2563eb',
+                    padding: '12px 24px',
+                    fontSize: '16px',
+                    fontWeight: '500',
+                    backgroundColor: loading ? '#93c5fd' : '#2563eb',
                     color: 'white',
                     border: 'none',
                     borderRadius: '6px',
-                    fontSize: '16px',
-                    fontWeight: '500',
-                    cursor: loading ? 'not-allowed' : 'pointer'
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    transition: 'background-color 0.2s'
                   }}
                 >
                   {loading ? 'Generating...' : 'Generate Email Drafts'}
                 </button>
               </div>
 
-              {/* Results */}
               {drafts && (
-                <div>
-                  <h2 style={{ marginBottom: '20px' }}>Your Email Drafts</h2>
-                  {['friendly', 'formal', 'direct'].map((tone) => {
-                    const draft = drafts[tone];
-                    console.log('Rendering tone:', tone);
-                    console.log('Draft object:', draft);
-                    console.log('Draft.subject type:', typeof draft?.subject);
-                    console.log('Draft.subject value:', draft?.subject);
-                    console.log('Draft.body type:', typeof draft?.body);
-                    
-                    if (!draft) return null;
-                    
-                    // Force everything to be a string
-                    const subject = String(draft.subject || 'No subject');
-                    const body = String(draft.body || 'No body');
-                    
-                    console.log('After String conversion - subject:', subject);
-                    console.log('After String conversion - body:', body);
-                    
-                    return (
-                      <div key={tone} style={{ marginBottom: '20px', padding: '20px', background: 'white', borderRadius: '8px', border: '1px solid #ddd' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
-                          <h3 style={{ textTransform: 'capitalize' }}>{tone} Version</h3>
+                <div style={{ marginTop: '40px' }}>
+                  <h2 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '20px', color: '#1a1a1a' }}>
+                    Your Email Drafts
+                  </h2>
+                  <div style={{ display: 'grid', gap: '20px' }}>
+                    {Object.entries(drafts).map(([tone, draft], index) => (
+                      <div
+                        key={tone}
+                        style={{
+                          border: '1px solid #ddd',
+                          borderRadius: '8px',
+                          padding: '20px',
+                          backgroundColor: 'white'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '16px' }}>
+                          <div>
+                            <h3 style={{ fontSize: '16px', fontWeight: '600', textTransform: 'capitalize', marginBottom: '4px' }}>
+                              {tone} Version
+                            </h3>
+                            <p style={{ fontSize: '13px', color: '#666', margin: 0 }}>
+                              {toneOptions.find(t => t.value === tone)?.desc}
+                            </p>
+                          </div>
                           <button
-                            onClick={() => copyText(subject + '\n\n' + body)}
+                            onClick={() => copyToClipboard(`${draft.subject}\n\n${draft.body}`, index)}
                             style={{
-                              padding: '8px 15px',
-                              background: '#f3f4f6',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              padding: '8px 12px',
+                              fontSize: '14px',
+                              backgroundColor: copiedIndex === index ? '#10b981' : '#f3f4f6',
+                              color: copiedIndex === index ? 'white' : '#374151',
                               border: 'none',
                               borderRadius: '6px',
-                              cursor: 'pointer'
+                              cursor: 'pointer',
+                              transition: 'all 0.2s'
                             }}
                           >
-                            📋 Copy
+                            {copiedIndex === index ? '✓ Copied!' : '📋 Copy'}
                           </button>
                         </div>
                         
-                        <div style={{ marginBottom: '10px' }}>
-                          <strong style={{ color: '#666', fontSize: '13px' }}>Subject:</strong>
-                          <div style={{ marginTop: '5px' }}>{subject}</div>
+                        <div style={{ marginBottom: '12px' }}>
+                          <strong style={{ fontSize: '13px', color: '#666', display: 'block', marginBottom: '4px' }}>
+                            Subject:
+                          </strong>
+                          <div style={{ fontSize: '15px', color: '#1a1a1a' }}>
+                            {draft.subject}
+                          </div>
                         </div>
                         
                         <div>
-                          <strong style={{ color: '#666', fontSize: '13px' }}>Body:</strong>
-                          <div style={{ marginTop: '5px', padding: '15px', background: '#f9fafb', borderRadius: '6px', whiteSpace: 'pre-wrap' }}>
-                            {body}
+                          <strong style={{ fontSize: '13px', color: '#666', display: 'block', marginBottom: '8px' }}>
+                            Body:
+                          </strong>
+                          <div style={{
+                            fontSize: '15px',
+                            lineHeight: '1.6',
+                            color: '#1a1a1a',
+                            whiteSpace: 'pre-wrap',
+                            backgroundColor: '#f9fafb',
+                            padding: '16px',
+                            borderRadius: '6px',
+                            border: '1px solid #e5e7eb'
+                          }}>
+                            {draft.body}
                           </div>
                         </div>
                       </div>
-                    );
-                  })}
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
           );
         }
 
-        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<EmailDraftGenerator />);
+    </script>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(reg => console.log('Service Worker registered'))
+                    .catch(err => console.log('Service Worker registration failed'));
+            });
+        }
     </script>
 </body>
 </html>
