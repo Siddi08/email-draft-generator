@@ -147,15 +147,22 @@
                 })
               });
 
+              console.log('Response status:', response.status);
+
               if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Error response:', errorText);
                 throw new Error('Failed to generate emails');
               }
 
               const parsedDrafts = await response.json();
+              console.log('Parsed drafts:', parsedDrafts);
+              console.log('Draft structure:', JSON.stringify(parsedDrafts, null, 2));
               setDrafts(parsedDrafts);
             } catch (err) {
               console.error('Generation error:', err);
-              setError('Failed to generate emails. Please try again.');
+              console.error('Error details:', err.message, err.stack);
+              setError('Failed to generate emails. Check console for details.');
             } finally {
               setLoading(false);
             }
@@ -455,7 +462,7 @@
                               {tone} Version
                             </h3>
                             <p style={{ fontSize: '13px', color: '#666', margin: 0 }}>
-                              {toneOptions.find(t => t.value === tone)?.desc}
+                              {toneOptions.find(t => t.value === tone)?.desc || ''}
                             </p>
                           </div>
                           <button
@@ -493,7 +500,7 @@
                             Subject:
                           </strong>
                           <div style={{ fontSize: '15px', color: '#1a1a1a' }}>
-                            {draft.subject}
+                            {String(draft.subject || '')}
                           </div>
                         </div>
                         
@@ -511,7 +518,7 @@
                             borderRadius: '6px',
                             border: '1px solid #e5e7eb'
                           }}>
-                            {draft.body}
+                            {String(draft.body || '')}
                           </div>
                         </div>
                       </div>
