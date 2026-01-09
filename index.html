@@ -41,7 +41,7 @@
             
             setLoading(true);
             setError('');
-            
+          const { useState } = React;   
             try {
               const res = await fetch('/.netlify/functions/process-brain-dump', {
                 method: 'POST',
