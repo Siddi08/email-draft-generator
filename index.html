@@ -37,12 +37,8 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-
     <script type="text/babel">
         const { useState } = React;
-        const { AlertCircle, Copy, Check } = lucide;
 
         function EmailDraftGenerator() {
           const [emailType, setEmailType] = useState('follow-up');
@@ -416,7 +412,7 @@
 
                 {error && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px', color: '#991b1b' }}>
-                    <AlertCircle size={20} />
+                    <span>⚠️</span>
                     <span>{error}</span>
                   </div>
                 )}
@@ -446,16 +442,20 @@
                     Your Email Drafts
                   </h2>
                   <div style={{ display: 'grid', gap: '20px' }}>
-                    {Object.entries(drafts).map(([tone, draft], index) => (
-                      <div
-                        key={tone}
-                        style={{
-                          border: '1px solid #ddd',
-                          borderRadius: '8px',
-                          padding: '20px',
-                          backgroundColor: 'white'
-                        }}
-                      >
+                    {Object.entries(drafts).map(([tone, draft], index) => {
+                      // Defensive check
+                      if (!draft || typeof draft !== 'object') return null;
+                      
+                      return (
+                        <div
+                          key={tone}
+                          style={{
+                            border: '1px solid #ddd',
+                            borderRadius: '8px',
+                            padding: '20px',
+                            backgroundColor: 'white'
+                          }}
+                        >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '16px' }}>
                           <div>
                             <h3 style={{ fontSize: '16px', fontWeight: '600', textTransform: 'capitalize', marginBottom: '4px' }}>
@@ -481,17 +481,7 @@
                               transition: 'all 0.2s'
                             }}
                           >
-                            {copiedIndex === index ? (
-                              <>
-                                <Check size={16} />
-                                Copied!
-                              </>
-                            ) : (
-                              <>
-                                <Copy size={16} />
-                                Copy
-                              </>
-                            )}
+                            {copiedIndex === index ? '✓ Copied!' : '📋 Copy'}
                           </button>
                         </div>
                         
@@ -522,7 +512,8 @@
                           </div>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
